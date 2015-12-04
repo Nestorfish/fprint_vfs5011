@@ -449,98 +449,14 @@ void interpolate_lines(unsigned char *line1, float y1, unsigned char *line2, flo
 int min(int a, int b) {return (a < b) ? a : b;}
 
 // Rescale image to account for variable swiping speed
+// (disabled because of abnormal fingerprint stretching)
 int vfs5011_rescale_image(unsigned char *image, int input_lines,
                           unsigned char *output, int max_output_lines)
 {
-	// Number of output lines per distance between two scanners
-	enum {
-		RESOLUTION = 10,
-		MEDIAN_FILTER_SIZE = 13,
-		MAX_OFFSET = 10,
-		GOOD_OFFSETS_CRITERION = 20,
-		GOOD_OFFSETS_THRESHOLD = 3
-	};
-	int i;
-	float y = 0.0;
-	int line_ind = 0;
-	int *offsets = (int *)malloc(input_lines * sizeof(int));
-	int on_good_offsets = 0;
-	char name[1024];
-	char *debugpath = get_debugfiles_path();
-	FILE *debugfile = NULL;
-	
-	if (debugpath != NULL) {
-		sprintf(name, "%s/offsets%d.dat", debugpath, (int)time(NULL));
-		debugfile = fopen(name, "wb");
-	}
-	for (i = 0; i < input_lines-1; i += 2) {
-		int bestmatch = i;
-		int bestdiff = 0;
-		int j;
-		
-//  		if (! on_good_offsets && (i >= GOOD_OFFSETS_CRITERION)) {
-//  			if (get_deviation_int(offsets + i - GOOD_OFFSETS_CRITERION, GOOD_OFFSETS_CRITERION) <
-//  			    GOOD_OFFSETS_THRESHOLD)
-//  				on_good_offsets = 1;
-//  		}
-		
-		int firstrow, lastrow;
-//  		if (on_good_offsets) {
-//  			firstrow = i + offsets[i-1]-5;
-//  			lastrow = min(i + offsets[i-1]+5, input_lines-1);
-//  		} else {
-			firstrow = i+1;
-			lastrow = min(i + MAX_OFFSET, input_lines-1);
-//  		}
-		
-		for (j = firstrow; j <= lastrow; j++) {
-			int diff = get_deviation2(image + i*VFS5011_LINE_SIZE + 56,
-			                          image + j*VFS5011_LINE_SIZE + 168, 64);
-			if ((j == firstrow) || (diff < bestdiff)) {
-				bestdiff = diff;
-				bestmatch = j;
-			}
-		}
-		offsets[i/2] = bestmatch - i;
-		if (debugfile != NULL)
-			fprintf(debugfile, "%d\n", offsets[i/2]);
-	}
-	if (debugfile != NULL)
-		fclose(debugfile);
-	
-	median_filter(offsets, input_lines-1, MEDIAN_FILTER_SIZE);
-
-	debugfile = NULL;
-	if (debugpath != NULL) {
-		sprintf(name, "%s/offsets_filtered%d.dat", debugpath, (int)time(NULL));
-		debugfile = fopen(name, "wb");
-		if (debugfile != NULL) {
-			for (i = 0; i <= input_lines/2-1; i++)
-				fprintf(debugfile, "%d\n", offsets[i]);
-			fclose(debugfile);
-		}
-	}
-	
-	for (i = 0; i < input_lines-1; i++) {
-		int offset = offsets[i/2];
-		if (offset > 0) {
-			float ynext = y + (float)RESOLUTION / offset;
-			while (line_ind < ynext) {
-				if (line_ind > max_output_lines-1) {
-					free(offsets);
-					return line_ind;
-				}
-				interpolate_lines(image + i*VFS5011_LINE_SIZE + 8, y,
-				  image + (i+1)*VFS5011_LINE_SIZE + 8, ynext,
-				  output + line_ind*VFS5011_IMAGE_WIDTH, line_ind,
-				  VFS5011_IMAGE_WIDTH);
-				line_ind++;
-			}
-			y = ynext;
-		}
-	}
-	free(offsets);
-	return line_ind;
+	for (int i = 0; i < input_lines; i++)
+		for (int j = 0; j <= VFS5011_IMAGE_WIDTH; j++)
+			output[i*VFS5011_IMAGE_WIDTH + j] = image[i*VFS5011_LINE_SIZE + 8 + j];
+	return input_lines;
 }
 
 //====================== main stuff =======================
